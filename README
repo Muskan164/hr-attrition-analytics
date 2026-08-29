@@ -1,0 +1,152 @@
+# Employee Attrition Analytics: Who Leaves, Why, and What It Costs
+
+An end-to-end HR analytics project using the IBM HR Analytics dataset — going beyond
+a standard "predict attrition" exercise to segment employees into behavioural personas
+and quantify what attrition actually costs the business, by persona.
+
+## Why this project
+
+Having worked hands-on with Workday HCM and Workday Extend at Accenture, I wanted to
+explore the data side of the people decisions that HR systems support: not just *who*
+is likely to leave, but *why*, and *where retention budget would have the most impact*.
+
+## Executive summary
+
+- **Overtime roughly triples attrition risk** (30.5% vs 10.4% for those without it),
+  and this holds independently of department — overtime rates are nearly identical
+  across Sales, HR, and R&D (~27–29%), so overtime alone doesn't explain why some
+  departments lose more people than others.
+- **Sales and HR lose people at ~1.5x the rate of R&D** (20.6% and 19.0% vs 13.8%),
+  but for different underlying reasons: HR's gap is partly explained by lower pay
+  (lowest median income of the three departments), while Sales has the *highest*
+  median income of the three yet still the highest attrition — pay isn't the driver there.
+- **New joiners are by far the highest flight risk**: 34.9% attrition in year one,
+  falling steadily to 8.1% at 10+ years tenure.
+- **Overtime and low satisfaction compound rather than simply add up**: employees
+  with overtime *and* low-to-mid satisfaction attrite at 34–38%, compared to just
+  6.9% for those with neither. This interaction effect motivated segmenting
+  employees into personas rather than looking at single variables in isolation.
+- **Four distinct employee personas emerge from clustering** on income, tenure,
+  satisfaction, work-life balance and overtime:
+  - *Overworked & At-Risk* (26% of workforce): 32% attrition — the highest rate,
+    driven entirely by 100% overtime incidence in this group.
+  - *Dissatisfied Steady-Stater* (24%): 16% attrition — similar pay and tenure to
+    the safest group, but low job satisfaction is the driver, not workload.
+  - *Stable Mid-Career* (37%): 8% attrition — the largest and safest group.
+  - *Senior Veteran* (13%): 7% attrition — highest paid, longest tenured, most loyal.
+- **The costliest persona to lose isn't the same as the riskiest one.** Overworked
+  & At-Risk drives the highest *total* replacement cost (£4.44M) purely through
+  volume (122 leavers). But Senior Veterans — despite a 93% retention rate — cost
+  **£278,955 per departure on average**, nearly 8x any other persona, meaning just
+  14 senior departures cost the business almost as much in total (£3.9M) as 122
+  departures from the highest-risk group.
+
+**Takeaway for the business:** these two costly personas need entirely different
+retention strategies. Overworked & At-Risk is a high-volume, policy-level problem
+(workload/overtime redistribution). Senior Veteran is a low-volume, high-impact
+problem better addressed through individual retention planning and succession
+management, since each loss is disproportionately expensive.
+
+- **A logistic regression model (ROC-AUC 0.81) was chosen over a random forest
+  (ROC-AUC 0.776)**, despite the random forest achieving higher raw accuracy
+  (85% vs 77%). The random forest's apparent advantage came from over-predicting
+  the majority class: it caught only 31% of actual leavers (recall) compared to
+  63% for logistic regression. Since missing a genuine flight risk is generally
+  costlier to a business than an unnecessary retention conversation, recall was
+  prioritized over raw accuracy when selecting the final model.
+- **The model's strongest individual predictors** confirm the EDA (overtime,
+  income, tenure) and surface two factors not visible in the department-level
+  analysis: **frequent business travel** and **role-specific risk** — Laboratory
+  Technician and Sales Representative are the two highest-risk job roles
+  specifically, more precise than the department-level Sales/HR finding alone.
+  Time since last promotion and marital status (single) also independently
+  increase risk.
+- **Applying the model to current (non-departed) employees surfaces real,
+  actionable flight-risk flags** — but also a useful honest caveat: the
+  highest-risk employee flagged was a senior, highly satisfied, well-paid
+  Research Director, driven almost entirely by one strong factor (frequent
+  travel). This is a reminder that model outputs should support, not replace,
+  human judgment in retention decisions — a single dominant feature can
+  outweigh an otherwise low-risk profile, especially for underrepresented
+  groups in the training data (senior roles are rare in this dataset).
+
+## Dataset
+
+[IBM HR Analytics Employee Attrition & Performance](https://www.kaggle.com/datasets/pavansubhasht/ibm-hr-analytics-attrition-dataset)
+— a fictional dataset of 1,470 employees with 35 attributes covering demographics,
+compensation, satisfaction, and tenure. No missing data.
+
+**Note on cost estimates**: replacement costs are estimated as annual salary ×
+a seniority-based multiplier (0.5x for entry level up to 2x for senior/executive
+roles), a simplified version of a common HR industry rule of thumb. This is an
+approximation for illustrative purposes, not a precise business figure.
+
+## Methodology
+
+1. **Data cleaning** — dropped constant columns, engineered `AttritionFlag` and
+   `EstReplacementCost` fields.
+2. **Exploratory analysis** — examined attrition by department, overtime, job
+   satisfaction, tenure, and work-life balance, including cross-tabs to test
+   whether apparent relationships were confounded by other factors.
+3. **Persona segmentation** — K-Means clustering (k=4, chosen via the elbow
+   method) on income, tenure, satisfaction, work-life balance and overtime,
+   with clusters interpreted and named based on their average profiles.
+4. **Cost-of-attrition analysis** — combined personas with estimated replacement
+   cost to identify where retention investment would have the greatest impact.
+5. **Predictive model** — compared logistic regression and random forest
+   classifiers to flag at-risk employees. Both used `class_weight="balanced"`
+   to address class imbalance (attrition is ~16% of the data). Selected on
+   recall and ROC-AUC rather than raw accuracy, since missing a genuine flight
+   risk is costlier than a false alarm in this context. Logistic regression's
+   coefficients were also used to identify the strongest individual predictors
+   of attrition.
+6. **Interactive dashboard** — Streamlit app combining all of the above into
+   one filterable view: department/overtime KPIs, persona breakdown with
+   attrition rate and cost, and a live-scored flight-risk table for current
+   employees (the model is trained inside the app on load, so risk scores
+   reflect the current filtered data rather than a static export).
+7. **SQL validation layer** — reproduced the key findings above (department
+   attrition, overtime effects, the satisfaction interaction, role-level risk,
+   and cost) independently in SQL against the same cleaned dataset, to confirm
+   consistency between the Python and SQL analyses and demonstrate both skill sets.
+
+## Project structure
+
+- `notebooks/01_eda.ipynb` — full exploratory analysis, persona segmentation,
+  cost-of-attrition analysis, and predictive modeling
+- `src/clean_data.py` — data cleaning and feature engineering pipeline
+- `dashboard/app.py` — interactive Streamlit dashboard: KPIs, department/overtime
+  charts, persona and cost breakdown, and live employee flight-risk scoring
+- `sql/queries.sql` — six business-question SQL queries, independently
+  validating the department, overtime, satisfaction, role-risk, and cost
+  findings from the Python analysis
+
+## Known limitations
+
+- Replacement cost figures are estimates using a simplified multiplier, not
+  actual recruitment/onboarding cost data.
+- The dashboard retrains the model on load rather than loading a saved model
+  file — a reasonable simplification for a portfolio project, but a saved,
+  versioned model would be the production-appropriate next step.
+- The dataset is fictional and relatively small (1,470 employees), so
+  findings — especially for smaller personas like Senior Veteran (196
+  employees) — should be read as illustrative rather than statistically robust
+  for real-world decision-making.
+
+## How to run
+
+```bash
+pip install -r requirements.txt
+python src/clean_data.py
+# then open notebooks/01_eda.ipynb in VS Code / Jupyter to see the full analysis
+streamlit run dashboard/app.py
+# (use `python -m streamlit run dashboard/app.py` if `streamlit` isn't on PATH)
+```
+
+To run the SQL queries: open `data/hr_clean.csv` in [DB Browser for SQLite](https://sqlitebrowser.org/)
+(File > Import > Table from CSV file, name the table `employees`), then paste
+the queries from `sql/queries.sql` into the Execute SQL tab.
+
+## Tools used
+
+Python (pandas, scikit-learn, matplotlib, seaborn), Jupyter, SQL, Streamlit
